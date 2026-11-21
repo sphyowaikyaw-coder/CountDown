@@ -1,0 +1,203 @@
+﻿@model HappyBirthday.Models.BirthdayViewModel
+@{
+    ViewData["Title"] = "Birthday countdown";
+    Layout = null;
+    var party = Model.IsBirthdayToday;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0d2a" />
+    <title>🎂 Birthday countdown – @Model.BirthdayPersonName</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/birthday.css" asp-append-version="true" />
+</head>
+<body data-mode="@(party ? "party" : "countdown")">
+
+    <canvas id="bgCanvas" aria-hidden="true"></canvas>
+    <audio id="bgAudio" preload="auto"></audio>
+    <audio id="bdVoice" preload="auto"></audio>
+
+    <div id="enterGate" class="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+        <h2 id="gateTitle">A birthday surprise for @Model.BirthdayPersonName</h2>
+        <p class="lead">Turn on sound to hear the music and the birthday message.</p>
+        <button id="enterBtn" class="pill primary big" type="button">🎂 Start with sound</button>
+        <button id="enterMute" class="link-btn" type="button">Continue without sound</button>
+    </div>
+
+    <main id="mainContent">
+        <div class="stage">
+
+        <figure id="photoFrame" class="photo-frame hidden">
+            <div class="photo-stack">
+                <img alt="" decoding="async" />
+                <img alt="" decoding="async" />
+            </div>
+        </figure>
+
+        <section id="countdownSection" class="@(party ? "hidden" : "")" aria-labelledby="bdName">
+            <p class="lead">Counting down to</p>
+            <h1 id="bdName" class="birthday-name"><span class="name-text">@Model.BirthdayPersonName</span>’s birthday</h1>
+
+            <div id="countdownDisplay" role="timer" aria-label="Time left until the birthday">
+                <div class="time-block"><span class="time-value" id="cdDays">00</span><span class="time-label">days</span></div>
+                <div class="time-block"><span class="time-value" id="cdHours">00</span><span class="time-label">hours</span></div>
+                <div class="time-block"><span class="time-value" id="cdMinutes">00</span><span class="time-label">minutes</span></div>
+                <div class="time-block seconds"><span class="time-value" id="cdSeconds">00</span><span class="time-label">seconds</span></div>
+            </div>
+
+            <p class="target-date" id="targetDate"></p>
+        </section>
+
+        <section id="celebrationSection" class="@(party ? "revealed" : "hidden")" aria-live="polite">
+            <h1 class="celebration-title">@Model.GreetingMessage</h1>
+            <div class="cake-anim" aria-hidden="true">🎂</div>
+            <p class="subtitle">Today is the day. Enjoy every minute!</p>
+            <button id="voiceBadge" class="voice-badge hidden" type="button"></button>
+        </section>
+
+        </div>
+    </main>
+
+    <div id="musicPlayer" role="group" aria-label="Music player">
+        <span id="musicNote" aria-hidden="true">🎵</span>
+        <div id="musicInfo">
+            <span id="musicTitle">@Model.SongTitle</span>
+            <span id="musicStatus" aria-live="polite">Paused</span>
+        </div>
+        <input id="musicVolume" type="range" min="0" max="1" step="0.05" value="0.7" aria-label="Volume" />
+        <button id="musicToggle" class="pill primary" type="button" aria-pressed="false">▶ Play</button>
+        <button id="musicSkip" class="pill" type="button" aria-label="Next song" hidden>⏭</button>
+    </div>
+
+    <div id="floatingEmojis" aria-hidden="true"></div>
+    <div id="toast" class="toast hidden" role="status"></div>
+
+    <button id="adminTriggerBtn" type="button" title="Settings" aria-label="Open settings">⚙</button>
+
+    <div id="adminOverlay" class="admin-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+        <div class="admin-modal">
+            <button class="admin-close" id="adminCloseBtn" type="button" aria-label="Close settings">✕</button>
+            <h2 id="adminTitle">Birthday settings</h2>
+
+            <div id="adminTabs" class="admin-tabs hidden">
+                <button class="admin-tab active" type="button" data-tab="tab-person">Person &amp; date</button>
+                <button class="admin-tab" type="button" data-tab="tab-media">Song &amp; voice</button>
+                <button class="admin-tab" type="button" data-tab="tab-photos">Photos</button>
+                <button class="admin-tab" type="button" data-tab="tab-songs">Library</button>
+            </div>
+
+            <form id="tab-lock" class="admin-form tab-pane" novalidate>
+                <div class="form-group">
+                    <label for="inp-pin">Admin PIN</label>
+                    <input id="inp-pin" type="password" autocomplete="current-password" inputmode="numeric" />
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="pill primary">Unlock</button>
+                </div>
+            </form>
+
+            <form id="tab-person" class="admin-form tab-pane hidden" novalidate>
+                <div class="form-group">
+                    <label for="inp-name">Person’s name</label>
+                    <input id="inp-name" type="text" maxlength="60" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label for="inp-date">Birthday date and time</label>
+                    <input id="inp-date" type="datetime-local" />
+                </div>
+                <div class="form-group">
+                    <label for="inp-msg">Greeting message</label>
+                    <textarea id="inp-msg" rows="3" maxlength="200"></textarea>
+                    <span class="char-counter"><span id="msgLen">0</span> / 200</span>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="pill primary" id="goToMediaTab">Next: song &amp; voice</button>
+                </div>
+            </form>
+
+            <form id="tab-media" class="admin-form tab-pane hidden" novalidate>
+                <div class="form-group">
+                    <span class="group-label">New theme song</span>
+                    <div class="file-drop-zone" id="songDrop" tabindex="0" role="button">
+                        <span class="drop-label">Drop an .mp3 here, or click to browse</span>
+                        <input id="inp-song" type="file" accept=".mp3,audio/mpeg" class="file-input" />
+                    </div>
+                    <div id="songPreviewWrap" class="audio-preview hidden">
+                        <audio id="songPreview" controls></audio>
+                        <span id="songFileName" class="file-name-label"></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <span class="group-label">New voice greeting</span>
+                    <div class="file-drop-zone" id="voiceDrop" tabindex="0" role="button">
+                        <span class="drop-label">Drop an .mp3 here, or click to browse</span>
+                        <input id="inp-voice" type="file" accept=".mp3,audio/mpeg" class="file-input" />
+                    </div>
+                    <div id="voicePreviewWrap" class="audio-preview hidden">
+                        <audio id="voicePreview" controls></audio>
+                        <span id="voiceFileName" class="file-name-label"></span>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="pill" id="goToPersonTab">Back</button>
+                    <button type="button" class="pill primary" id="goToSongsTab">Next: photos</button>
+                </div>
+            </form>
+
+            <form id="tab-photos" class="admin-form tab-pane hidden" novalidate>
+                <div class="form-group">
+                    <span class="group-label">Add photos</span>
+                    <div class="file-drop-zone" id="photoDrop" tabindex="0" role="button">
+                        <span class="drop-label">Drop photos here, or click to browse (JPG, PNG, WebP, GIF)</span>
+                        <input id="inp-photos" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="file-input" />
+                    </div>
+                    <div id="photoPreviewGrid" class="thumb-grid"></div>
+                </div>
+                <div class="form-group">
+                    <span class="group-label">Current photos</span>
+                    <div id="photoListContainer" class="thumb-grid"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="pill" id="goToMediaFromPhotos">Back</button>
+                    <button type="button" class="pill primary" id="goToSongsFromPhotos">Next: library</button>
+                </div>
+            </form>
+
+            <form id="tab-songs" class="admin-form tab-pane hidden" novalidate>
+                <div class="form-group">
+                    <span class="group-label">Theme songs</span>
+                    <div id="songListContainer" class="song-list"></div>
+                </div>
+                <div class="form-group">
+                    <span class="group-label">Voice greetings</span>
+                    <div id="voiceListContainer" class="song-list"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="pill" id="goToMediaTabFromSongs">Back</button>
+                    <button type="button" class="pill primary" id="applySettingsBtn">Save changes</button>
+                </div>
+            </form>
+
+            <p id="adminMsg" class="admin-msg" role="status"></p>
+        </div>
+    </div>
+
+    <script>
+        window.BD = @Json.Serialize(new {
+            name = Model.BirthdayPersonName,
+            greeting = Model.GreetingMessage,
+            dateIso = Model.BirthdayDateIso,
+            isToday = Model.IsBirthdayToday,
+            songFile = Model.SongFile,
+            voiceFile = Model.VoiceFile
+        });
+    </script>
+    <script src="~/js/birthday.js" asp-append-version="true"></script>
+    <script src="~/js/admin-panel.js" asp-append-version="true"></script>
+</body>
+</html>
