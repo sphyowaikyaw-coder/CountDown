@@ -1,5 +1,4 @@
-﻿
-(() => {
+﻿(() => {
     'use strict';
 
     const $ = id => document.getElementById(id);
@@ -11,10 +10,9 @@
     };
     const state = {
         name: cfg.name, greeting: cfg.greeting, target: new Date(cfg.dateIso),
-        voiceFile: cfg.voiceFile, entered: false, soundOn: false, partyShown: false
+        voiceFile: cfg.voiceFile, entered: false, soundOn: false, partyShown: false, live: false
     };
 
-    /* ───────── Music ───────── */
     const audio = $('bgAudio'), voice = $('bdVoice');
     const btnPlay = $('musicToggle'), btnSkip = $('musicSkip'), vol = $('musicVolume');
     const titleEl = $('musicTitle'), statusEl = $('musicStatus'), noteEl = $('musicNote');
@@ -59,10 +57,10 @@
                     const i = files.indexOf(current);
                     playlist = files;
                     idx = i >= 0 ? i : 0;
-                    if (i < 0 && audio.getAttribute('src')) setTrack(idx, !audio.paused); // current song was removed
+                    if (i < 0 && audio.getAttribute('src')) setTrack(idx, !audio.paused); 
                 }
             }
-        } catch { /* keep the old list */ }
+        } catch {  }
         btnSkip.hidden = playlist.length < 2;
         return playlist;
     }
@@ -90,10 +88,20 @@
         setTrack((idx + 1) % playlist.length, true);
     });
 
-    /* ───────── Voice greeting ───────── */
     const badge = $('voiceBadge');
     const showBadge = t => { badge.textContent = t; badge.classList.remove('hidden'); };
     const hideBadge = () => badge.classList.add('hidden');
+    const idleBadge = () => showBadge('🎤 Play the birthday voice again');
+    let voicePlaying = false;
+
+    function stopVoice() {
+        voice.pause();
+        voice.currentTime = 0;
+        if (window.speechSynthesis) speechSynthesis.cancel();
+        voicePlaying = false;
+        idleBadge(); 
+        duck(false); 
+    }
 
     async function pickVoice() {
         try {
@@ -104,7 +112,7 @@
                     state.voiceFile = files.length === 1 ? files[0] : files[Math.floor(Math.random() * files.length)];
                 }
             }
-        } catch { /* use the default */ }
+        } catch { }
         setVoice(state.voiceFile);
     }
 
@@ -120,33 +128,39 @@
         speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(`Happy Birthday, ${state.name}! Wishing you a wonderful day!`);
         u.rate = 0.9; u.pitch = 1.1;
-        u.onend = () => { hideBadge(); duck(false); };
-        showBadge('🎤 Saying happy birthday…');
+        u.onend = () => { voicePlaying = false; idleBadge(); duck(false); };
+        voicePlaying = true;
+        showBadge('⏹ Tap to stop');
         speechSynthesis.speak(u);
     }
 
     async function playVoice(manual = false) {
         if (!state.soundOn && !manual) return;
-        showBadge('🎤 Saying happy birthday…');
+        showBadge('⏹ Tap to stop');
         duck(true);
-        voice.onended = () => { hideBadge(); duck(false); };
+        voicePlaying = true;
+        voice.onended = () => { voicePlaying = false; idleBadge(); duck(false); };
         try {
             voice.currentTime = 0;
             await voice.play();
         } catch (err) {
+            voicePlaying = false;
             duck(false);
             if (err && err.name === 'NotAllowedError') showBadge('🔊 Tap here to hear your birthday message');
-            else speak(); // missing or unsupported file → speech fallback
+            else speak(); 
         }
     }
-    badge.addEventListener('click', () => { state.soundOn = true; playVoice(true); });
+    badge.addEventListener('click', () => {
+        if (voicePlaying) { stopVoice(); return; }   
+        state.soundOn = true;                         
+        playVoice(true);
+    });
 
     function unlockVoice() {
         voice.muted = true;
         voice.play().then(() => { voice.pause(); voice.currentTime = 0; }).catch(() => { }).finally(() => { voice.muted = false; });
     }
 
-    /* ───────── Entry gate ───────── */
     const gate = $('enterGate');
     function enter(withSound) {
         state.entered = true;
@@ -154,7 +168,7 @@
         gate.classList.add('leaving');
         setTimeout(() => gate.remove(), 450);
         if (!withSound) return;
-        if (state.partyShown) playVoice(); else unlockVoice();
+        if (state.partyShown && state.live) playVoice(); else unlockVoice();
         audio.play().catch(() => { });
     }
     $('enterBtn').addEventListener('click', () => enter(true));
@@ -199,13 +213,14 @@
             state.partyShown = true;
             cel.classList.add('revealed');
             bg.burst();
-            if (state.entered) playVoice();
+            if (state.entered && state.live) playVoice(); 
         }
     }
 
     function startCountdown() {
         clearInterval(timer);
-        if (state.target <= Date.now()) { showCelebration(); return; }
+        if (state.target <= Date.now()) { state.live = false; showCelebration(); return; }
+        state.live = true;
         state.partyShown = false;
         $('countdownSection').classList.remove('hidden');
         $('celebrationSection').classList.add('hidden');
@@ -214,7 +229,6 @@
         timer = setInterval(tick, 250);
     }
 
-    /* ───────── Background: stars, motes, fireworks ───────── */
     const bg = (() => {
         const canvas = $('bgCanvas'), ctx = canvas.getContext('2d');
         const HUES = [42, 345, 190, 285, 150];
@@ -344,8 +358,6 @@
         for (let i = 0; i < 5; i++) setTimeout(spawn, i * 200);
     })();
 
-    /* ───────── Public API for the admin panel ───────── */
-    /* ───────── Photo frame (cross-fading slideshow) ───────── */
     const frame = $('photoFrame');
     const layers = [...frame.querySelectorAll('img')];
     const photoUrl = f => '/images/birthday/' + encodeURIComponent(f);
