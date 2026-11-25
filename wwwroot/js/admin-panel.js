@@ -1,23 +1,41 @@
-
 (() => {
     'use strict';
 
     const $ = id => document.getElementById(id);
     const app = window.BDApp;
 
-    const overlay = $('adminOverlay'), trigger = $('adminTriggerBtn');
+    const overlay = $('adminOverlay');
+    const trigger = $('adminTriggerBtn');
     const tabsBar = $('adminTabs');
     const tabs = [...document.querySelectorAll('.admin-tab')];
     const panes = [...document.querySelectorAll('.tab-pane')];
-    const inpName = $('inp-name'), inpDate = $('inp-date'), inpMsg = $('inp-msg'), msgLen = $('msgLen');
-    const inpSong = $('inp-song'), inpVoice = $('inp-voice'), inpPhotos = $('inp-photos');
+    const inpName = $('inp-name');
+    const inpDate = $('inp-date');
+    const inpMsg = $('inp-msg');
+    const msgLen = $('msgLen');
+    const inpDob = $('inp-dob');
+    const inpTime = $('inp-time');
+    const inpSong = $('inp-song');
+    const inpVoice = $('inp-voice');
+    const inpPhotos = $('inp-photos');
 
-    let pin = null, clicks = 0, clickTimer = null, lastFocus = null;
-    let selectedSong = null, selectedVoice = null, selectedPhotos = [];
+    let pin = null;
+    let clicks = 0;
+    let clickTimer = null;
+    let lastFocus = null;
+    let selectedSong = null;
+    let selectedVoice = null;
+    let selectedPhotos = [];
     const previewUrls = {};
 
     const api = (path, opts = {}) =>
-        fetch(path, { ...opts, headers: { ...(opts.headers || {}), 'X-Admin-Pin': pin || '' } });
+        fetch(path, {
+            ...opts,
+            headers: {
+                ...(opts.headers || {}),
+                'X-Admin-Pin': pin || ''
+            }
+        });
 
     const say = (text, isError = false) => {
         const m = $('adminMsg');
@@ -41,7 +59,12 @@
         document.body.style.overflow = 'hidden';
         resetMedia();
         say('');
-        if (pin) { fillPerson(); showTab('tab-person'); } else showTab('tab-lock');
+        if (pin) {
+            fillPerson();
+            showTab('tab-person');
+        } else {
+            showTab('tab-lock');
+        }
     }
 
     function closeModal() {
@@ -54,16 +77,29 @@
         tabsBar.classList.toggle('hidden', id === 'tab-lock');
         tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === id));
         panes.forEach(p => p.classList.toggle('hidden', p.id !== id));
-        if (id === 'tab-songs') loadLibrary();
-        if (id === 'tab-photos') loadPhotos();
+        if (id === 'tab-songs') {
+            loadLibrary();
+        }
+        if (id === 'tab-photos') {
+            loadPhotos();
+        }
         const first = $(id).querySelector('input:not([type=file]), textarea, button');
         first?.focus();
+    }
+
+    function syncDobMode() {
+        const on = !!inpDob.value;
+        inpDate.disabled = on;
+        inpTime.disabled = !on;
     }
 
     function fillPerson() {
         const s = app.get();
         inpName.value = s.name;
         inpDate.value = toLocalInput(new Date(s.dateIso));
+        inpDob.value = s.birthDate || '';
+        inpTime.value = s.birthTime || '00:00';
+        syncDobMode();
         inpMsg.value = s.greeting;
         msgLen.textContent = inpMsg.value.length;
     }
@@ -71,29 +107,57 @@
     trigger.addEventListener('click', () => {
         clicks++;
         clearTimeout(clickTimer);
-        if (clicks >= 3) { clicks = 0; openModal(); }
-        else clickTimer = setTimeout(() => { clicks = 0; }, 700);
+        if (clicks >= 3) {
+            clicks = 0;
+            openModal();
+        } else {
+            clickTimer = setTimeout(() => {
+                clicks = 0;
+            }, 700);
+        }
     });
 
     $('adminCloseBtn').addEventListener('click', closeModal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
-    document.addEventListener('keydown', e => {
-        if (overlay.classList.contains('hidden')) return;
-        if (e.key === 'Escape') { closeModal(); return; }
-        if (e.key === 'Tab') { 
-            const f = [...overlay.querySelectorAll('button, input:not([type=file]), textarea, [tabindex="0"]')]
-                .filter(n => !n.disabled && n.offsetParent !== null);
-            if (!f.length) return;
-            const first = f[0], last = f[f.length - 1];
-            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay) {
+            closeModal();
         }
     });
+
+    document.addEventListener('keydown', e => {
+        if (overlay.classList.contains('hidden')) {
+            return;
+        }
+        if (e.key === 'Escape') {
+            closeModal();
+            return;
+        }
+        if (e.key === 'Tab') {
+            const f = [...overlay.querySelectorAll('button, input:not([type=file]), textarea, [tabindex="0"]')]
+                .filter(n => !n.disabled && n.offsetParent !== null);
+            if (!f.length) {
+                return;
+            }
+            const first = f[0];
+            const last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    });
+
     document.querySelectorAll('.admin-form').forEach(f => f.addEventListener('submit', e => e.preventDefault()));
 
     $('tab-lock').addEventListener('submit', async () => {
         const entered = $('inp-pin').value;
-        if (!entered) { say('Enter the PIN to continue.', true); return; }
+        if (!entered) {
+            say('Enter the PIN to continue.', true);
+            return;
+        }
         pin = entered;
         try {
             const r = await api('/api/admin/verify', { method: 'POST' });
@@ -112,7 +176,6 @@
         }
     });
 
-    /* ───────── Tabs ───────── */
     tabs.forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
     $('goToMediaTab').addEventListener('click', () => showTab('tab-media'));
     $('goToPersonTab').addEventListener('click', () => showTab('tab-person'));
@@ -120,40 +183,75 @@
     $('goToMediaFromPhotos').addEventListener('click', () => showTab('tab-media'));
     $('goToSongsFromPhotos').addEventListener('click', () => showTab('tab-songs'));
     $('goToMediaTabFromSongs').addEventListener('click', () => showTab('tab-photos'));
-    inpMsg.addEventListener('input', () => { msgLen.textContent = inpMsg.value.length; });
+    inpDob.addEventListener('input', syncDobMode);
+    inpMsg.addEventListener('input', () => {
+        msgLen.textContent = inpMsg.value.length;
+    });
 
-    /* ───────── File pickers ───────── */
     function bindDrop(dropId, input, previewId, wrapId, labelId, onFile) {
         const drop = $(dropId);
         const handle = file => {
-            if (!file) return;
-            if (!file.name.toLowerCase().endsWith('.mp3')) { say('Only .mp3 files are supported.', true); return; }
-            if (file.size > 40 * 1024 * 1024) { say('That file is larger than 40 MB.', true); return; }
+            if (!file) {
+                return;
+            }
+            if (!file.name.toLowerCase().endsWith('.mp3')) {
+                say('Only .mp3 files are supported.', true);
+                return;
+            }
+            if (file.size > 40 * 1024 * 1024) {
+                say('That file is larger than 40 MB.', true);
+                return;
+            }
             say('');
             onFile(file);
-            if (previewUrls[previewId]) URL.revokeObjectURL(previewUrls[previewId]);
+            if (previewUrls[previewId]) {
+                URL.revokeObjectURL(previewUrls[previewId]);
+            }
             previewUrls[previewId] = URL.createObjectURL(file);
             $(previewId).src = previewUrls[previewId];
             $(labelId).textContent = file.name;
             $(wrapId).classList.remove('hidden');
         };
+
         drop.addEventListener('click', () => input.click());
-        drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
-        drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+        drop.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                input.click();
+            }
+        });
+        drop.addEventListener('dragover', e => {
+            e.preventDefault();
+            drop.classList.add('drag-over');
+        });
         drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
-        drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag-over'); handle(e.dataTransfer.files[0]); });
+        drop.addEventListener('drop', e => {
+            e.preventDefault();
+            drop.classList.remove('drag-over');
+            handle(e.dataTransfer.files[0]);
+        });
         input.addEventListener('change', () => handle(input.files[0]));
     }
-    bindDrop('songDrop', inpSong, 'songPreview', 'songPreviewWrap', 'songFileName', f => { selectedSong = f; });
-    bindDrop('voiceDrop', inpVoice, 'voicePreview', 'voicePreviewWrap', 'voiceFileName', f => { selectedVoice = f; });
+
+    bindDrop('songDrop', inpSong, 'songPreview', 'songPreviewWrap', 'songFileName', f => {
+        selectedSong = f;
+    });
+    bindDrop('voiceDrop', inpVoice, 'voicePreview', 'voicePreviewWrap', 'voiceFileName', f => {
+        selectedVoice = f;
+    });
 
     function resetMedia() {
         selectedSong = selectedVoice = null;
         inpSong.value = inpVoice.value = '';
         ['songPreview', 'voicePreview'].forEach(id => {
             const a = $(id);
-            a.pause(); a.removeAttribute('src'); a.load();
-            if (previewUrls[id]) { URL.revokeObjectURL(previewUrls[id]); delete previewUrls[id]; }
+            a.pause();
+            a.removeAttribute('src');
+            a.load();
+            if (previewUrls[id]) {
+                URL.revokeObjectURL(previewUrls[id]);
+                delete previewUrls[id];
+            }
         });
         $('songFileName').textContent = $('voiceFileName').textContent = '';
         $('songPreviewWrap').classList.add('hidden');
@@ -169,8 +267,14 @@
     function addPhotos(fileList) {
         const grid = $('photoPreviewGrid');
         for (const file of fileList) {
-            if (!isPhoto(file)) { say(`${file.name} is not a JPG, PNG, WebP or GIF image.`, true); continue; }
-            if (file.size > 8 * 1024 * 1024) { say(`${file.name} is larger than 8 MB.`, true); continue; }
+            if (!isPhoto(file)) {
+                say(`${file.name} is not a JPG, PNG, WebP or GIF image.`, true);
+                continue;
+            }
+            if (file.size > 8 * 1024 * 1024) {
+                say(`${file.name} is larger than 8 MB.`, true);
+                continue;
+            }
             say('');
             selectedPhotos.push(file);
 
@@ -187,30 +291,59 @@
 
             const cell = document.createElement('div');
             cell.className = 'thumb';
-            rm.addEventListener('click', () => { selectedPhotos = selectedPhotos.filter(f => f !== file); cell.remove(); });
+            rm.addEventListener('click', () => {
+                selectedPhotos = selectedPhotos.filter(f => f !== file);
+                cell.remove();
+            });
             cell.append(img, rm);
             grid.appendChild(cell);
         }
     }
 
     photoDrop.addEventListener('click', () => inpPhotos.click());
-    photoDrop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inpPhotos.click(); } });
-    photoDrop.addEventListener('dragover', e => { e.preventDefault(); photoDrop.classList.add('drag-over'); });
+    photoDrop.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            inpPhotos.click();
+        }
+    });
+    photoDrop.addEventListener('dragover', e => {
+        e.preventDefault();
+        photoDrop.classList.add('drag-over');
+    });
     photoDrop.addEventListener('dragleave', () => photoDrop.classList.remove('drag-over'));
-    photoDrop.addEventListener('drop', e => { e.preventDefault(); photoDrop.classList.remove('drag-over'); addPhotos(e.dataTransfer.files); });
-    inpPhotos.addEventListener('change', () => { addPhotos(inpPhotos.files); inpPhotos.value = ''; });
+    photoDrop.addEventListener('drop', e => {
+        e.preventDefault();
+        photoDrop.classList.remove('drag-over');
+        addPhotos(e.dataTransfer.files);
+    });
+    inpPhotos.addEventListener('change', () => {
+        addPhotos(inpPhotos.files);
+        inpPhotos.value = '';
+    });
 
     async function loadPhotos() {
         const box = $('photoListContainer');
-        const note = t => { const p = document.createElement('p'); p.className = 'thumb-empty'; p.textContent = t; box.replaceChildren(p); };
+        const note = t => {
+            const p = document.createElement('p');
+            p.className = 'thumb-empty';
+            p.textContent = t;
+            box.replaceChildren(p);
+        };
         note('Loading…');
 
         let files;
         try {
             const r = await fetch('/api/image-list');
             files = r.ok ? await r.json() : [];
-        } catch { note('Could not load photos.'); return; }
-        if (!files.length) { note('No photos yet.'); return; }
+        } catch {
+            note('Could not load photos.');
+            return;
+        }
+        if (!files.length) {
+            note('No photos yet.');
+            return;
+        }
 
         box.replaceChildren();
         files.forEach(file => {
@@ -225,20 +358,37 @@
             rm.setAttribute('aria-label', `Remove ${file}`);
             let armed = false;
             rm.addEventListener('click', async () => {
-                if (!armed) { // second tap confirms
-                    armed = true; rm.textContent = 'Sure?';
-                    setTimeout(() => { if (!rm.disabled) { armed = false; rm.textContent = '🗑'; } }, 3000);
+                if (!armed) {
+                    armed = true;
+                    rm.textContent = 'Sure?';
+                    setTimeout(() => {
+                        if (!rm.disabled) {
+                            armed = false;
+                            rm.textContent = '🗑';
+                        }
+                    }, 3000);
                     return;
                 }
                 rm.disabled = true;
                 try {
                     const r = await api(`/api/image/${encodeURIComponent(file)}`, { method: 'DELETE' });
                     const d = await r.json().catch(() => ({}));
-                    if (!r.ok) { say(d.message || `Could not remove ${file}.`, true); rm.disabled = false; armed = false; rm.textContent = '🗑'; return; }
+                    if (!r.ok) {
+                        say(d.message || `Could not remove ${file}.`, true);
+                        rm.disabled = false;
+                        armed = false;
+                        rm.textContent = '🗑';
+                        return;
+                    }
                     await app.refreshPhotos();
                     await loadPhotos();
                     say('Photo removed.');
-                } catch { say('Network error. Try again.', true); rm.disabled = false; armed = false; rm.textContent = '🗑'; }
+                } catch {
+                    say('Network error. Try again.', true);
+                    rm.disabled = false;
+                    armed = false;
+                    rm.textContent = '🗑';
+                }
             });
 
             const cell = document.createElement('div');
@@ -254,10 +404,16 @@
         try {
             const r = await fetch(listUrl);
             files = r.ok ? await r.json() : [];
-        } catch { box.textContent = 'Could not load this list.'; return; }
+        } catch {
+            box.textContent = 'Could not load this list.';
+            return;
+        }
 
         box.replaceChildren();
-        if (!files.length) { box.textContent = emptyText; return; }
+        if (!files.length) {
+            box.textContent = emptyText;
+            return;
+        }
 
         files.forEach(file => {
             const row = document.createElement('div');
@@ -272,10 +428,15 @@
             let armed = false;
 
             del.addEventListener('click', async () => {
-                if (!armed) { 
+                if (!armed) {
                     armed = true;
                     del.textContent = 'Tap again to confirm';
-                    setTimeout(() => { if (!del.disabled) { armed = false; del.textContent = 'Remove'; } }, 3000);
+                    setTimeout(() => {
+                        if (!del.disabled) {
+                            armed = false;
+                            del.textContent = 'Remove';
+                        }
+                    }, 3000);
                     return;
                 }
                 del.disabled = true;
@@ -285,7 +446,9 @@
                     const d = await r.json().catch(() => ({}));
                     if (!r.ok) {
                         say(d.message || `Could not remove ${file}.`, true);
-                        del.disabled = false; armed = false; del.textContent = 'Remove';
+                        del.disabled = false;
+                        armed = false;
+                        del.textContent = 'Remove';
                         return;
                     }
                     await afterDelete();
@@ -293,7 +456,9 @@
                     say(`${file} was removed.`);
                 } catch {
                     say('Network error. Try again.', true);
-                    del.disabled = false; armed = false; del.textContent = 'Remove';
+                    del.disabled = false;
+                    armed = false;
+                    del.textContent = 'Remove';
                 }
             });
 
@@ -316,21 +481,45 @@
         say('');
         try {
             const fd = new FormData();
-            if (inpName.value.trim()) fd.append('Name', inpName.value.trim());
-            if (inpDate.value) {
-                const d = new Date(inpDate.value);
-                if (!isNaN(d)) fd.append('BirthdayDate', d.toISOString());
+            if (inpName.value.trim()) {
+                fd.append('Name', inpName.value.trim());
             }
-            if (inpMsg.value.trim()) fd.append('Greeting', inpMsg.value.trim());
-            if (selectedSong) fd.append('SongFile', selectedSong);
-            if (selectedVoice) fd.append('VoiceFile', selectedVoice);
+            if (inpDob.value) {
+                fd.append('BirthDate', inpDob.value);
+                fd.append('BirthTime', inpTime.value || '00:00');
+            } else {
+                fd.append('ClearBirthDate', 'true');
+                if (inpDate.value) {
+                    const d = new Date(inpDate.value);
+                    if (!isNaN(d)) {
+                        fd.append('BirthdayDate', d.toISOString());
+                    }
+                }
+            }
+            if (inpMsg.value.trim()) {
+                fd.append('Greeting', inpMsg.value.trim());
+            }
+            if (selectedSong) {
+                fd.append('SongFile', selectedSong);
+            }
+            if (selectedVoice) {
+                fd.append('VoiceFile', selectedVoice);
+            }
             selectedPhotos.forEach(f => fd.append('ImageFiles', f));
 
             const res = await api('/api/settings', { method: 'POST', body: fd });
             const data = await res.json().catch(() => ({}));
 
-            if (res.status === 401) { pin = null; showTab('tab-lock'); say('The PIN was rejected. Enter it again.', true); return; }
-            if (!res.ok) { say(data.message || 'Could not save the settings.', true); return; }
+            if (res.status === 401) {
+                pin = null;
+                showTab('tab-lock');
+                say('The PIN was rejected. Enter it again.', true);
+                return;
+            }
+            if (!res.ok) {
+                say(data.message || 'Could not save the settings.', true);
+                return;
+            }
 
             app.apply(data);
             resetMedia();

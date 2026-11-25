@@ -12,7 +12,9 @@
     --body: 'Figtree', system-ui, sans-serif;
 }
 
-* {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
 }
 
@@ -29,7 +31,8 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-[hidden], .hidden {
+[hidden],
+.hidden {
     display: none !important;
 }
 
@@ -277,7 +280,6 @@ button {
     font-size: 1.05rem;
 }
 
-/* ── Celebration ───────────────────────── */
 .celebration-title {
     margin: 0 auto;
     max-width: 18ch;
@@ -396,7 +398,8 @@ button {
     opacity: .06;
 }
 
-    #adminTriggerBtn:hover, #adminTriggerBtn:focus-visible {
+    #adminTriggerBtn:hover,
+    #adminTriggerBtn:focus-visible {
         opacity: .7;
     }
 
@@ -468,15 +471,18 @@ button {
     margin-bottom: 1.1rem;
 }
 
-    .form-group label, .group-label {
+    .form-group label,
+    .group-label {
         display: block;
         margin-bottom: .4rem;
         font-weight: 600;
         font-size: .95rem;
     }
 
-.admin-modal input[type=text], .admin-modal input[type=password],
-.admin-modal input[type=datetime-local], .admin-modal textarea {
+.admin-modal input[type=text],
+.admin-modal input[type=password],
+.admin-modal input[type=datetime-local],
+.admin-modal textarea {
     width: 100%;
     padding: .7rem .85rem;
     font: inherit;
@@ -585,7 +591,6 @@ button {
     box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
 }
 
-/* ── Small screens ─────────────────────── */
 @media (max-width: 560px) {
     #countdownDisplay {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -603,7 +608,9 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
         animation: none !important;
         transition: none !important;
     }
@@ -691,3 +698,41 @@ button {
         color: var(--ink);
         font-size: .8rem;
     }
+
+.age-line {
+    margin: .7rem 0 0;
+    color: var(--gold);
+    font-weight: 600;
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+}
+
+    .age-line:empty {
+        display: none;
+    }
+
+.admin-modal input[type=date],
+.admin-modal input[type=time] {
+    width: 100%;
+    padding: .7rem .85rem;
+    font: inherit;
+    color: var(--ink);
+    color-scheme: dark;
+    background: rgba(255, 255, 255, .06);
+    border: 1px solid var(--line);
+    border-radius: .8rem;
+}
+
+.admin-modal input[type=datetime-local] {
+    color-scheme: dark;
+}
+
+.admin-modal input:disabled {
+    opacity: .45;
+}
+
+.hint {
+    display: block;
+    margin-top: .35rem;
+    font-size: .85rem;
+    color: var(--muted);
+}

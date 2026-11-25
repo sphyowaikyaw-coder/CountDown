@@ -11,13 +11,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0d2a" />
     <title>🎂 Birthday countdown – @Model.BirthdayPersonName</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Figtree:wght@400;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/fonts/bricolage-grotesque.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/fonts/figtree.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/birthday.css" asp-append-version="true" />
 </head>
 <body data-mode="@(party ? "party" : "countdown")">
-
     <canvas id="bgCanvas" aria-hidden="true"></canvas>
     <audio id="bgAudio" preload="auto"></audio>
     <audio id="bdVoice" preload="auto"></audio>
@@ -31,35 +29,46 @@
 
     <main id="mainContent">
         <div class="stage">
+            <figure id="photoFrame" class="photo-frame hidden">
+                <div class="photo-stack">
+                    <img alt="" decoding="async" />
+                    <img alt="" decoding="async" />
+                </div>
+            </figure>
 
-        <figure id="photoFrame" class="photo-frame hidden">
-            <div class="photo-stack">
-                <img alt="" decoding="async" />
-                <img alt="" decoding="async" />
-            </div>
-        </figure>
+            <section id="countdownSection" class="@(party ? "hidden" : "")" aria-labelledby="bdName">
+                <p class="lead">Counting down to</p>
+                <h1 id="bdName" class="birthday-name"><span class="name-text">@Model.BirthdayPersonName</span>’s birthday</h1>
+                <p id="ageLine" class="age-line"></p>
 
-        <section id="countdownSection" class="@(party ? "hidden" : "")" aria-labelledby="bdName">
-            <p class="lead">Counting down to</p>
-            <h1 id="bdName" class="birthday-name"><span class="name-text">@Model.BirthdayPersonName</span>’s birthday</h1>
+                <div id="countdownDisplay" role="timer" aria-label="Time left until the birthday">
+                    <div class="time-block">
+                        <span class="time-value" id="cdDays">00</span>
+                        <span class="time-label">days</span>
+                    </div>
+                    <div class="time-block">
+                        <span class="time-value" id="cdHours">00</span>
+                        <span class="time-label">hours</span>
+                    </div>
+                    <div class="time-block">
+                        <span class="time-value" id="cdMinutes">00</span>
+                        <span class="time-label">minutes</span>
+                    </div>
+                    <div class="time-block seconds">
+                        <span class="time-value" id="cdSeconds">00</span>
+                        <span class="time-label">seconds</span>
+                    </div>
+                </div>
 
-            <div id="countdownDisplay" role="timer" aria-label="Time left until the birthday">
-                <div class="time-block"><span class="time-value" id="cdDays">00</span><span class="time-label">days</span></div>
-                <div class="time-block"><span class="time-value" id="cdHours">00</span><span class="time-label">hours</span></div>
-                <div class="time-block"><span class="time-value" id="cdMinutes">00</span><span class="time-label">minutes</span></div>
-                <div class="time-block seconds"><span class="time-value" id="cdSeconds">00</span><span class="time-label">seconds</span></div>
-            </div>
+                <p class="target-date" id="targetDate"></p>
+            </section>
 
-            <p class="target-date" id="targetDate"></p>
-        </section>
-
-        <section id="celebrationSection" class="@(party ? "revealed" : "hidden")" aria-live="polite">
-            <h1 class="celebration-title">@Model.GreetingMessage</h1>
-            <div class="cake-anim" aria-hidden="true">🎂</div>
-            <p class="subtitle">Today is the day. Enjoy every minute!</p>
-            <button id="voiceBadge" class="voice-badge hidden" type="button"></button>
-        </section>
-
+            <section id="celebrationSection" class="@(party ? "revealed" : "hidden")" aria-live="polite">
+                <h1 class="celebration-title">@Model.GreetingMessage</h1>
+                <div class="cake-anim" aria-hidden="true">🎂</div>
+                <p id="celebSub" class="subtitle">Today is the day. Enjoy every minute!</p>
+                <button id="voiceBadge" class="voice-badge hidden" type="button"></button>
+            </section>
         </div>
     </main>
 
@@ -107,7 +116,16 @@
                     <input id="inp-name" type="text" maxlength="60" autocomplete="off" />
                 </div>
                 <div class="form-group">
-                    <label for="inp-date">Birthday date and time</label>
+                    <label for="inp-dob">Date of birth</label>
+                    <input id="inp-dob" type="date" />
+                    <span class="hint">The countdown repeats every year on this day and shows the age. Leave it empty to use a one-time date below.</span>
+                </div>
+                <div class="form-group">
+                    <label for="inp-time">Celebrate at (time)</label>
+                    <input id="inp-time" type="time" value="00:00" />
+                </div>
+                <div class="form-group">
+                    <label for="inp-date">One-time birthday date and time</label>
                     <input id="inp-date" type="datetime-local" />
                 </div>
                 <div class="form-group">
@@ -188,13 +206,16 @@
     </div>
 
     <script>
-        window.BD = @Json.Serialize(new {
-            name = Model.BirthdayPersonName,
-            greeting = Model.GreetingMessage,
-            dateIso = Model.BirthdayDateIso,
-            isToday = Model.IsBirthdayToday,
-            songFile = Model.SongFile,
-            voiceFile = Model.VoiceFile
+        window.BD = @Json.Serialize(new
+        {
+                name = Model.BirthdayPersonName,
+                greeting = Model.GreetingMessage,
+                dateIso = Model.BirthdayDateIso,
+                isToday = Model.IsBirthdayToday,
+                songFile = Model.SongFile,
+                voiceFile = Model.VoiceFile,
+                birthDate = Model.BirthDate,
+                birthTime = Model.BirthTime
         });
     </script>
     <script src="~/js/birthday.js" asp-append-version="true"></script>

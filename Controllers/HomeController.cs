@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,13 +12,16 @@ namespace HappyBirthday.Controllers
     {
         private const int MaxPhotos = 30;
         private static readonly object Gate = new();
-        private static readonly string[] ImageExts = [".jpg", ".png", ".webp", ".gif"];
+        private static readonly string[] ImageExts = { ".jpg", ".png", ".webp", ".gif" };
 
         private readonly ILogger<HomeController> _logger;
         private readonly IWebHostEnvironment _env;
         private readonly IConfiguration _config;
 
-        public HomeController(ILogger<HomeController> logger, IWebHostEnvironment env, IConfiguration config)
+        public HomeController(
+            ILogger<HomeController> logger,
+            IWebHostEnvironment env,
+            IConfiguration config)
         {
             _logger = logger;
             _env = env;
@@ -38,8 +41,8 @@ namespace HappyBirthday.Controllers
                 {
                     if (System.IO.File.Exists(SettingsPath))
                     {
-                        return JsonSerializer.Deserialize<StoredSettings>(
-                            System.IO.File.ReadAllText(SettingsPath)) ?? new();
+                        return JsonSerializer.Deserialize<StoredSettings>(System.IO.File.ReadAllText(SettingsPath))
+                               ?? new();
                     }
                 }
                 catch (Exception ex)
@@ -64,10 +67,7 @@ namespace HappyBirthday.Controllers
 
         private static string TitleFrom(string file)
         {
-            var t = Path.GetFileNameWithoutExtension(file)
-                .Replace('-', ' ')
-                .Replace('_', ' ');
-
+            var t = Path.GetFileNameWithoutExtension(file).Replace('-', ' ').Replace('_', ' ');
             return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(t);
         }
 
@@ -87,9 +87,7 @@ namespace HappyBirthday.Controllers
 
         [HttpPost("/api/admin/verify")]
         public IActionResult VerifyPin() =>
-            IsAdmin()
-                ? Ok(new { ok = true })
-                : Unauthorized(new { message = "Wrong PIN." });
+            IsAdmin() ? Ok(new { ok = true }) : Unauthorized(new { message = "Wrong PIN." });
 
         public IActionResult Index()
         {
@@ -101,7 +99,9 @@ namespace HappyBirthday.Controllers
                 GreetingMessage = s.Greeting,
                 SongFile = s.SongFile,
                 SongTitle = TitleFrom(s.SongFile),
-                VoiceFile = s.VoiceFile
+                VoiceFile = s.VoiceFile,
+                BirthDate = s.BirthDate,
+                BirthTime = s.BirthTime
             });
         }
 
@@ -115,7 +115,8 @@ namespace HappyBirthday.Controllers
             }
 
             var s = LoadSettings();
-            bool songUploaded = false, voiceUploaded = false;
+            bool songUploaded = false;
+            bool voiceUploaded = false;
 
             if (req.SongFile is { Length: > 0 })
             {
@@ -196,12 +197,46 @@ namespace HappyBirthday.Controllers
                 s.BirthdayDate = parsed;
             }
 
+            if (req.ClearBirthDate)
+            {
+                s.BirthDate = null;
+            }
+            else if (!string.IsNullOrWhiteSpace(req.BirthDate))
+            {
+                if (!DateOnly.TryParseExact(
+                        req.BirthDate,
+                        "yyyy-MM-dd",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var dob)
+                    || dob > DateOnly.FromDateTime(DateTime.Today.AddDays(1)))
+                {
+                    return BadRequest(new { message = "Enter a valid date of birth that is not in the future." });
+                }
+
+                var time = string.IsNullOrWhiteSpace(req.BirthTime) ? "00:00" : req.BirthTime.Trim();
+                if (!TimeOnly.TryParseExact(
+                        time,
+                        "HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out _))
+                {
+                    return BadRequest(new { message = "Enter the celebration time like 00:00 or 18:30." });
+                }
+
+                s.BirthDate = dob.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                s.BirthTime = time;
+            }
+
             SaveSettingsFile(s);
 
             return Ok(new
             {
                 name = s.Name,
                 birthdayDate = s.BirthdayDate.ToString("o"),
+                birthDate = s.BirthDate,
+                birthTime = s.BirthTime,
                 greeting = s.Greeting,
                 songFile = s.SongFile,
                 voiceFile = s.VoiceFile,
@@ -221,9 +256,7 @@ namespace HappyBirthday.Controllers
             await using var stream = file.OpenReadStream();
             var b = new byte[3];
             var n = await stream.ReadAsync(b.AsMemory(0, 3));
-            return n == 3 &&
-                   ((b[0] == 'I' && b[1] == 'D' && b[2] == '3') ||
-                    (b[0] == 0xFF && (b[1] & 0xE0) == 0xE0));
+            return n == 3 && ((b[0] == 'I' && b[1] == 'D' && b[2] == '3') || (b[0] == 0xFF && (b[1] & 0xE0) == 0xE0));
         }
 
         private static async Task<string?> DetectImageExtAsync(IFormFile file)
@@ -308,7 +341,7 @@ namespace HappyBirthday.Controllers
                     .Select(f => Path.GetFileName(f)!)
                     .OrderBy(f => f)
                     .ToList()
-                : [];
+                : new List<string>();
 
         [HttpGet("/api/audio-list")]
         public IActionResult AudioList() => Json(ListMp3(AudioDir));
@@ -355,7 +388,6 @@ namespace HappyBirthday.Controllers
             var remaining = ListMp3(dir)
                 .Where(f => !f.Equals(safeName, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-
             if (!isVoice && remaining.Count == 0)
             {
                 return BadRequest(new { message = "Keep at least one theme song." });
@@ -389,7 +421,7 @@ namespace HappyBirthday.Controllers
                     .Select(f => Path.GetFileName(f)!)
                     .OrderBy(f => f)
                     .ToList()
-                : [];
+                : new List<string>();
 
         [HttpGet("/api/image-list")]
         public IActionResult ImageList() => Json(ListImages(ImageDir));

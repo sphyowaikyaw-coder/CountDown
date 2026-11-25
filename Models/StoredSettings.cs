@@ -7,5 +7,7 @@
         public string Greeting { get; set; } = "🎉 Happy Birthday, MgKyaw! Wishing you an amazing year ahead! 🎂✨";
         public string SongFile { get; set; } = "birthday.mp3";
         public string VoiceFile { get; set; } = "voice.mp3";
+        public string? BirthDate { get; set; }              
+        public string BirthTime { get; set; } = "00:00";     
     }
 }

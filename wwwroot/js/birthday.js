@@ -10,7 +10,8 @@
     };
     const state = {
         name: cfg.name, greeting: cfg.greeting, target: new Date(cfg.dateIso),
-        voiceFile: cfg.voiceFile, entered: false, soundOn: false, partyShown: false, live: false
+        voiceFile: cfg.voiceFile, entered: false, soundOn: false, partyShown: false, live: false,
+        birthDate: cfg.birthDate || null, birthTime: cfg.birthTime || '00:00'
     };
 
     const audio = $('bgAudio'), voice = $('bdVoice');
@@ -21,7 +22,7 @@
     const voiceUrl = f => '/audio/voice/' + encodeURIComponent(f);
     const setStatus = t => { statusEl.textContent = t; };
 
-    let playlist = [cfg.songFile], idx = 0, ducked = false;
+    let playlist = [cfg.songFile], idx = 0, ducked = false, userPaused = false, errorSkips = 0;
     let baseVolume = parseFloat(store.get('bd-volume') ?? '0.7');
     if (!(baseVolume >= 0 && baseVolume <= 1)) baseVolume = 0.7;
     audio.volume = baseVolume;
@@ -57,7 +58,7 @@
                     const i = files.indexOf(current);
                     playlist = files;
                     idx = i >= 0 ? i : 0;
-                    if (i < 0 && audio.getAttribute('src')) setTrack(idx, !audio.paused); 
+                    if (i < 0 && audio.getAttribute('src')) setTrack(idx, !audio.paused);
                 }
             }
         } catch {  }
@@ -66,8 +67,8 @@
     }
 
     btnPlay.addEventListener('click', () => {
-        if (audio.paused) audio.play().catch(() => setStatus('Playback was blocked'));
-        else audio.pause();
+        if (audio.paused) { userPaused = false; audio.play().catch(() => setStatus('Playback was blocked')); }
+        else { userPaused = true; audio.pause(); }
     });
     btnSkip.addEventListener('click', async () => {
         const wasPlaying = !audio.paused;
@@ -82,11 +83,19 @@
     audio.addEventListener('play', syncPlayer);
     audio.addEventListener('pause', syncPlayer);
     audio.addEventListener('waiting', () => setStatus('Buffering…'));
-    audio.addEventListener('error', () => { if (audio.getAttribute('src')) setStatus('⚠ Song file not found'); });
-    audio.addEventListener('ended', async () => {
-        await refreshPlaylist();
-        setTrack((idx + 1) % playlist.length, true);
+    audio.addEventListener('error', () => {
+        if (!audio.getAttribute('src')) return;
+        setStatus('⚠ Song file not found');
+        if (state.soundOn && !userPaused && playlist.length > 1 && errorSkips++ < playlist.length) setTimeout(playNext, 800);
     });
+
+    function playNext() {
+        if (!playlist.length) return;
+        setTrack((idx + 1) % playlist.length, true);
+        refreshPlaylist();
+    }
+    audio.addEventListener('ended', playNext);
+    audio.addEventListener('playing', () => { errorSkips = 0; });
 
     const badge = $('voiceBadge');
     const showBadge = t => { badge.textContent = t; badge.classList.remove('hidden'); };
@@ -112,7 +121,7 @@
                     state.voiceFile = files.length === 1 ? files[0] : files[Math.floor(Math.random() * files.length)];
                 }
             }
-        } catch { }
+        } catch {  }
         setVoice(state.voiceFile);
     }
 
@@ -147,12 +156,12 @@
             voicePlaying = false;
             duck(false);
             if (err && err.name === 'NotAllowedError') showBadge('🔊 Tap here to hear your birthday message');
-            else speak(); 
+            else speak();
         }
     }
     badge.addEventListener('click', () => {
-        if (voicePlaying) { stopVoice(); return; }   
-        state.soundOn = true;                         
+        if (voicePlaying) { stopVoice(); return; }  
+        state.soundOn = true;                       
         playVoice(true);
     });
 
@@ -175,7 +184,6 @@
     $('enterMute').addEventListener('click', () => enter(false));
     $('enterBtn').focus();
 
-    /* ───────── Countdown ───────── */
     const el = { d: $('cdDays'), h: $('cdHours'), m: $('cdMinutes'), s: $('cdSeconds') };
     const pad = n => String(n).padStart(2, '0');
     const dateFmt = new Intl.DateTimeFormat(undefined, {
@@ -201,7 +209,34 @@
         put(el.s, t % 60);
     }
 
-    function setDateLabel() { $('targetDate').textContent = dateFmt.format(state.target); }
+    let rollTimer = null;
+    const isLeap = y => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    const ordinal = n => { const t = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (t[(v - 20) % 10] || t[v] || t[0]); };
+
+    function resolveTarget() {
+        if (!state.birthDate) return;
+        const [, m, d] = state.birthDate.split('-').map(Number);
+        const [hh, mm] = (state.birthTime || '00:00').split(':').map(Number);
+        const at = y => new Date(y, m - 1, (m === 2 && d === 29 && !isLeap(y)) ? 28 : d, hh, mm, 0);
+        const now = new Date();
+        let t = at(now.getFullYear());
+        const dayEnd = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+        if (now >= dayEnd) t = at(now.getFullYear() + 1);
+        state.target = t;
+    }
+
+    function updateAge() {
+        const line = $('ageLine'), sub = $('celebSub');
+        const age = state.birthDate ? state.target.getFullYear() - Number(state.birthDate.slice(0, 4)) : 0;
+        if (age < 1) { line.textContent = ''; sub.textContent = 'Today is the day. Enjoy every minute!'; return; }
+        line.textContent = `Turning ${age}`;
+        sub.textContent = `Happy ${ordinal(age)} birthday! Enjoy every minute.`;
+    }
+
+    function setDateLabel() {
+        $('targetDate').textContent = dateFmt.format(state.target);
+        updateAge();
+    }
 
     function showCelebration() {
         clearInterval(timer);
@@ -209,6 +244,11 @@
         const cel = $('celebrationSection');
         cel.classList.remove('hidden');
         document.body.dataset.mode = 'party';
+        if (state.birthDate) { 
+            clearTimeout(rollTimer);
+            const dayEnd = new Date(state.target.getFullYear(), state.target.getMonth(), state.target.getDate() + 1);
+            rollTimer = setTimeout(startCountdown, Math.max(1000, dayEnd - Date.now()));
+        }
         if (!state.partyShown) {
             state.partyShown = true;
             cel.classList.add('revealed');
@@ -219,9 +259,13 @@
 
     function startCountdown() {
         clearInterval(timer);
+        clearTimeout(rollTimer);
+        resolveTarget();
+        setDateLabel();
         if (state.target <= Date.now()) { state.live = false; showCelebration(); return; }
         state.live = true;
         state.partyShown = false;
+        $('celebrationSection').classList.remove('revealed');
         $('countdownSection').classList.remove('hidden');
         $('celebrationSection').classList.add('hidden');
         document.body.dataset.mode = 'countdown';
@@ -396,7 +440,7 @@
     }
 
     window.BDApp = {
-        get: () => ({ name: state.name, greeting: state.greeting, dateIso: state.target.toISOString() }),
+        get: () => ({ name: state.name, greeting: state.greeting, dateIso: state.target.toISOString(), birthDate: state.birthDate, birthTime: state.birthTime }),
         refreshPlaylist,
         refreshPhotos,
         pickVoice,
@@ -417,10 +461,9 @@
                 const t = document.querySelector('.celebration-title');
                 if (t) t.textContent = d.greeting;
             }
-            if (d.birthdayDate) {
-                const t = new Date(d.birthdayDate);
-                if (+t !== +state.target) { state.target = t; setDateLabel(); startCountdown(); }
-            }
+            if ('birthDate' in d) { state.birthDate = d.birthDate || null; state.birthTime = d.birthTime || '00:00'; }
+            if (!state.birthDate && d.birthdayDate) state.target = new Date(d.birthdayDate);
+            startCountdown();
             if (d.songUploaded && d.songFile) this.playSong(d.songFile);
             if (d.voiceUploaded && d.voiceFile) setVoice(d.voiceFile);
             if (d.imagesUploaded) refreshPhotos();
